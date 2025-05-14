@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <title>任意时区时间转换工具</title>
+  <title>部分时区时间转换工具</title>
   <script src="https://cdn.jsdelivr.net/npm/luxon@3/build/global/luxon.min.js"></script>
   <style>
     body { font-family: sans-serif; padding: 20px; }
@@ -18,7 +18,8 @@
   <label>输入时间：</label>
   <input type="datetime-local" id="inputTime">
   <label>输入时区：</label>
-  <input type="text" id="inputZone" value="UTC">
+  <select id="inputZone"></select>
+
   <button onclick="convert()">转换</button>
 
   <table>
@@ -36,18 +37,41 @@
   <script>
     const { DateTime } = luxon;
 
+    // 常见时区列表（不含偏移，稍后动态计算）
     const timezones = [
-      { offset: "UTC-8", name: "PST", id: "America/Los_Angeles" },
-      { offset: "UTC-5", name: "EST", id: "America/New_York" },
-      { offset: "UTC+0", name: "UTC", id: "UTC" },
-      { offset: "UTC+1", name: "CET", id: "Europe/Paris" },
-      { offset: "UTC+8", name: "CST (China)", id: "Asia/Shanghai" },
-      { offset: "UTC+9", name: "JST", id: "Asia/Tokyo" },
-      { offset: "UTC+10", name: "AEST", id: "Australia/Sydney" },
-      { offset: "UTC+5:30", name: "IST (India)", id: "Asia/Kolkata" },
-      { offset: "UTC+3", name: "MSK", id: "Europe/Moscow" },
-      { offset: "UTC-3", name: "BRT", id: "America/Sao_Paulo" }
+      { name: "PST", id: "America/Los_Angeles" },
+      { name: "EST", id: "America/New_York" },
+      { name: "UTC", id: "UTC" },
+      { name: "CET", id: "Europe/Paris" },
+      { name: "CST (China)", id: "Asia/Shanghai" },
+      { name: "JST", id: "Asia/Tokyo" },
+      { name: "AEST", id: "Australia/Sydney" },
+      { name: "IST (India)", id: "Asia/Kolkata" },
+      { name: "MSK", id: "Europe/Moscow" },
+      { name: "BRT", id: "America/Sao_Paulo" }
     ];
+
+    const select = document.getElementById("inputZone");
+
+    // 动态生成下拉选项，显示当前偏移
+    timezones.forEach(tz => {
+      const now = DateTime.now().setZone(tz.id);
+      const offset = now.offset; // 单位：分钟
+      const offsetHours = offset / 60;
+      const sign = offsetHours >= 0 ? "+" : "";
+      const offsetStr = `UTC${sign}${offsetHours}`;
+
+      const option = document.createElement("option");
+      option.value = tz.id;
+      option.textContent = `${offsetStr} | ${tz.name} | ${tz.id}`;
+      select.appendChild(option);
+    });
+
+    // 默认选中用户当前时区
+    const localZone = DateTime.local().zoneName;
+    if ([...select.options].some(opt => opt.value === localZone)) {
+      select.value = localZone;
+    }
 
     function convert() {
       const inputTime = document.getElementById("inputTime").value;
@@ -70,6 +94,10 @@
 
         timezones.forEach(tz => {
           const local = dt.setZone(tz.id);
+          const now = DateTime.now().setZone(tz.id);
+          const offset = now.offset / 60;
+          const offsetStr = `UTC${offset >= 0 ? "+" : ""}${offset}`;
+
           const row = document.createElement("tr");
 
           if (tz.name === "CET" || tz.name.includes("China")) {
@@ -77,7 +105,7 @@
           }
 
           row.innerHTML = `
-            <td>${tz.offset}</td>
+            <td>${offsetStr}</td>
             <td>${tz.name}</td>
             <td>${tz.id}</td>
             <td>${local.toFormat("yyyy-MM-dd HH:mm:ss")}</td>
@@ -89,8 +117,12 @@
       }
     }
 
-    // 默认执行一次
-    convert();
+    // 默认执行一次（使用当前时间）
+    window.addEventListener("DOMContentLoaded", () => {
+      const now = DateTime.local().toISO({ suppressMilliseconds: true, includeOffset: false });
+      document.getElementById("inputTime").value = now.substring(0, 16); // yyyy-MM-ddTHH:mm
+      convert();
+    });
   </script>
 </body>
 </html>
