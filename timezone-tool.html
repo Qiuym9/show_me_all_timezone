@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>任意时区时间转换工具</title>
+  <script src="https://cdn.jsdelivr.net/npm/luxon@3/build/global/luxon.min.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    input, select { padding: 5px; margin: 5px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 8px; }
+    tr.highlight { background-color: #f0f8ff; }
+  </style>
+</head>
+<body>
+  <h2>任意时区时间转换工具</h2>
+
+  <label>输入时间：</label>
+  <input type="datetime-local" id="inputTime">
+  <label>输入时区：</label>
+  <input type="text" id="inputZone" value="UTC">
+  <button onclick="convert()">转换</button>
+
+  <table>
+    <thead>
+      <tr>
+        <th>UTC 偏移</th>
+        <th>常用名称</th>
+        <th>时区 ID</th>
+        <th>本地时间</th>
+      </tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <script>
+    const { DateTime } = luxon;
+
+    const timezones = [
+      { offset: "UTC-8", name: "PST", id: "America/Los_Angeles" },
+      { offset: "UTC-5", name: "EST", id: "America/New_York" },
+      { offset: "UTC+0", name: "UTC", id: "UTC" },
+      { offset: "UTC+1", name: "CET", id: "Europe/Paris" },
+      { offset: "UTC+8", name: "CST (China)", id: "Asia/Shanghai" },
+      { offset: "UTC+9", name: "JST", id: "Asia/Tokyo" },
+      { offset: "UTC+10", name: "AEST", id: "Australia/Sydney" },
+      { offset: "UTC+5:30", name: "IST (India)", id: "Asia/Kolkata" },
+      { offset: "UTC+3", name: "MSK", id: "Europe/Moscow" },
+      { offset: "UTC-3", name: "BRT", id: "America/Sao_Paulo" }
+    ];
+
+    function convert() {
+      const inputTime = document.getElementById("inputTime").value;
+      const inputZone = document.getElementById("inputZone").value;
+
+      if (!inputTime || !inputZone) {
+        alert("请输入时间和时区！");
+        return;
+      }
+
+      try {
+        const dt = DateTime.fromISO(inputTime, { zone: inputZone });
+        if (!dt.isValid) {
+          alert("时间或时区无效，请检查！");
+          return;
+        }
+
+        const tbody = document.getElementById("results");
+        tbody.innerHTML = "";
+
+        timezones.forEach(tz => {
+          const local = dt.setZone(tz.id);
+          const row = document.createElement("tr");
+
+          if (tz.name === "CET" || tz.name.includes("China")) {
+            row.classList.add("highlight");
+          }
+
+          row.innerHTML = `
+            <td>${tz.offset}</td>
+            <td>${tz.name}</td>
+            <td>${tz.id}</td>
+            <td>${local.toFormat("yyyy-MM-dd HH:mm:ss")}</td>
+          `;
+          tbody.appendChild(row);
+        });
+      } catch (e) {
+        alert("转换失败：" + e.message);
+      }
+    }
+
+    // 默认执行一次
+    convert();
+  </script>
+</body>
+</html>
