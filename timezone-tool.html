@@ -9,6 +9,7 @@
     input, select, button { padding: 5px; margin: 5px; }
     table { border-collapse: collapse; width: 100%; margin-top: 10px; }
     th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    tr.highlight { background-color: #f0f8ff; }
     th { background-color: #f0f0f0; }
   </style>
 </head>
@@ -38,62 +39,75 @@
   <script>
     const { DateTime } = luxon;
 
-    // 常见时区及简称（优先使用）
+    function getAbbreviation(zone) {
+        try {
+          const dt = new Date();
+          const formatter = new Intl.DateTimeFormat("en-US", {
+            timeZone: zone,
+            timeZoneName: "short"
+          });
+          const parts = formatter.formatToParts(dt);
+          const abbrev = parts.find(p => p.type === "timeZoneName");
+          console.log(abbrev)
+          return abbrev ? abbrev.value : "";
+        } catch {
+          return "";
+        }
+      }
+      
+    // defined timezones
     const timezones = [
-      { name: "PST", id: "America/Los_Angeles" },
-      { name: "EST", id: "America/New_York" },
-      { name: "UTC", id: "UTC" },
-      { name: "CET", id: "Europe/Paris" },
-      { name: "CST (China)", id: "Asia/Shanghai" },
-      { name: "JST", id: "Asia/Tokyo" },
-      { name: "AEST", id: "Australia/Sydney" },
-      { name: "IST (India)", id: "Asia/Kolkata" },
-      { name: "MSK", id: "Europe/Moscow" },
-      { name: "BRT", id: "America/Sao_Paulo" }
-    ];
+        "Etc/GMT+12",              // UTC-12
+        "Pacific/Pago_Pago",       // UTC-11
+        "Pacific/Honolulu",        // UTC-10
+        "America/Anchorage",       // UTC-9
+        "America/Los_Angeles",     // UTC-8
+        "America/Denver",          // UTC-7
+        "America/Chicago",         // UTC-6
+        "America/New_York",        // UTC-5
+        "America/Halifax",         // UTC-4
+        "America/Sao_Paulo",       // UTC-3
+        "Atlantic/South_Georgia",  // UTC-2
+        "Atlantic/Azores",         // UTC-1
+        "UTC",                     // UTC+0
+        "Europe/London",           // UTC+0/+1
+        "Europe/Paris",            // UTC+1/+2
+        "Europe/Athens",           // UTC+2/+3
+        "Europe/Moscow",           // UTC+3
+        "Asia/Dubai",              // UTC+4
+        "Asia/Karachi",            // UTC+5
+        "Asia/Kolkata",            // UTC+5:30
+        "Asia/Dhaka",              // UTC+6
+        "Asia/Bangkok",            // UTC+7
+        "Asia/Shanghai",           // UTC+8
+        "Asia/Tokyo",              // UTC+9
+        "Australia/Sydney",        // UTC+10
+        "Pacific/Noumea",          // UTC+11
+        "Pacific/Auckland",        // UTC+12
+        "Pacific/Tongatapu",       // UTC+13
+        "Pacific/Kiritimati"       // UTC+14
+        ];
 
-    // 构建唯一偏移映射（使用 offsetMinutes 为 key）
-    const buildUniqueZones = () => {
-      const baseZones = {};
-
-      // 1. 添加默认偏移时区（Etc/GMT±N）
-      for (let i = -12; i <= 12; i++) {
-        const id = `Etc/GMT${i === 0 ? "" : (i > 0 ? `-${i}` : `+${-i}`)}`;
-        const dt = DateTime.now().setZone(id);
-        if (!dt.isValid) continue;
-
-        const offset = dt.offset; // in minutes
-        baseZones[offset] = {
-          id,
-          name: "",
-          offsetMinutes: offset
-        };
+    function buildUniqueZones() {
+        return timezones.map(id => {
+          const dt = DateTime.now().setZone(id);
+          return {
+            id,
+            name: getAbbreviation(id),
+            offsetMinutes: dt.offset
+          };
+        }).sort((a, b) => a.offsetMinutes - b.offsetMinutes);
       }
 
-      // 2. 用常见时区覆盖（优先）
-      timezones.forEach(({ id, name }) => {
-        const dt = DateTime.now().setZone(id);
-        if (!dt.isValid) return;
-
-        const offset = dt.offset;
-        baseZones[offset] = {
-          id,
-          name,
-          offsetMinutes: offset
-        };
-      });
-
-      // 3. 转换为数组并排序
-      return Object.values(baseZones).sort((a, b) => a.offsetMinutes - b.offsetMinutes);
-    };
-
-    // 填充下拉菜单
+    // select options
     function populateSelect(zones) {
       const select = document.getElementById("inputZone");
-      zones.forEach(({ id, name }) => {
+
+      zones.forEach(({ id, name, offsetMinutes }) => {
         const option = document.createElement("option");
+        const offsetStr = formatOffset(offsetMinutes);
         option.value = id;
-        option.textContent = `${name ? name + " | " : ""}${id}`;
+        option.textContent = `${offsetStr} | ${name ? name + " | " : ""}${id}`;
         select.appendChild(option);
       });
 
@@ -112,8 +126,6 @@
         return `UTC${sign}${hours}:${minutes}`;
       }
       
-
-    // 执行转换
     function convert() {
       const inputTime = document.getElementById("inputTime").value;
       const inputZone = document.getElementById("inputZone").value;
@@ -140,6 +152,12 @@
         const offsetStr = formatOffset(offsetMinutes);
 
         const row = document.createElement("tr");
+        
+        // for my usage
+        if (id.includes("Asia/Shanghai") || id.includes("Europe/Paris")) {
+            row.classList.add("highlight");
+        }
+      
         row.innerHTML = `
           <td>${offsetStr.replace(".00", ":00").replace(".50", ":30")}</td>
           <td>${name || ""}</td>
@@ -150,7 +168,7 @@
       });
     }
 
-    // 初始化页面
+    // init page
     window.addEventListener("DOMContentLoaded", () => {
       const now = DateTime.local();
       document.getElementById("inputTime").value = now.toISO({ suppressMilliseconds: true }).substring(0, 16);
