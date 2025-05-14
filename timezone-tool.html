@@ -146,12 +146,19 @@
       tbody.innerHTML = "";
   
       const zones = buildUniqueZones();
+      const existZones = new Set(); // 用于去重
       zones.forEach(({ id, name, offsetMinutes }) => {
         const localTime = dt.setZone(id);
         if (!localTime.isValid) return;
   
         const offsetStr = formatOffset(offsetMinutes);
   
+        const displayTime = localTime.toFormat("yyyy-MM-dd HH:mm:ss");
+
+        const key = `${offsetStr}|${displayTime}`;
+        if (existZones.has(key)) return; // 如果这个时间和偏移已存在，则跳过
+        existZones.add(key);
+
         const row = document.createElement("tr");
   
         // 高亮特定时区
