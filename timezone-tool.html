@@ -2,21 +2,22 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <title>部分时区时间转换工具</title>
+  <title>UTC 偏移时区转换工具</title>
   <script src="https://cdn.jsdelivr.net/npm/luxon@3/build/global/luxon.min.js"></script>
   <style>
     body { font-family: sans-serif; padding: 20px; }
-    input, select { padding: 5px; margin: 5px; }
+    input, select, button { padding: 5px; margin: 5px; }
     table { border-collapse: collapse; width: 100%; margin-top: 10px; }
-    th, td { border: 1px solid #ccc; padding: 8px; }
-    tr.highlight { background-color: #f0f8ff; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background-color: #f0f0f0; }
   </style>
 </head>
 <body>
-  <h2>任意时区时间转换工具</h2>
+  <h2>UTC 偏移时区转换工具</h2>
 
   <label>输入时间：</label>
   <input type="datetime-local" id="inputTime">
+
   <label>输入时区：</label>
   <select id="inputZone"></select>
 
@@ -26,7 +27,7 @@
     <thead>
       <tr>
         <th>UTC 偏移</th>
-        <th>常用名称</th>
+        <th>简称</th>
         <th>时区 ID</th>
         <th>本地时间</th>
       </tr>
@@ -37,7 +38,7 @@
   <script>
     const { DateTime } = luxon;
 
-    // 常见时区列表（不含偏移，稍后动态计算）
+    // 常见时区及简称（优先使用）
     const timezones = [
       { name: "PST", id: "America/Los_Angeles" },
       { name: "EST", id: "America/New_York" },
@@ -51,28 +52,68 @@
       { name: "BRT", id: "America/Sao_Paulo" }
     ];
 
-    const select = document.getElementById("inputZone");
+    // 构建唯一偏移映射（使用 offsetMinutes 为 key）
+    const buildUniqueZones = () => {
+      const baseZones = {};
 
-    // 动态生成下拉选项，显示当前偏移
-    timezones.forEach(tz => {
-      const now = DateTime.now().setZone(tz.id);
-      const offset = now.offset; // 单位：分钟
-      const offsetHours = offset / 60;
-      const sign = offsetHours >= 0 ? "+" : "";
-      const offsetStr = `UTC${sign}${offsetHours}`;
+      // 1. 添加默认偏移时区（Etc/GMT±N）
+      for (let i = -12; i <= 12; i++) {
+        const id = `Etc/GMT${i === 0 ? "" : (i > 0 ? `-${i}` : `+${-i}`)}`;
+        const dt = DateTime.now().setZone(id);
+        if (!dt.isValid) continue;
 
-      const option = document.createElement("option");
-      option.value = tz.id;
-      option.textContent = `${offsetStr} | ${tz.name} | ${tz.id}`;
-      select.appendChild(option);
-    });
+        const offset = dt.offset; // in minutes
+        baseZones[offset] = {
+          id,
+          name: "",
+          offsetMinutes: offset
+        };
+      }
 
-    // 默认选中用户当前时区
-    const localZone = DateTime.local().zoneName;
-    if ([...select.options].some(opt => opt.value === localZone)) {
-      select.value = localZone;
+      // 2. 用常见时区覆盖（优先）
+      timezones.forEach(({ id, name }) => {
+        const dt = DateTime.now().setZone(id);
+        if (!dt.isValid) return;
+
+        const offset = dt.offset;
+        baseZones[offset] = {
+          id,
+          name,
+          offsetMinutes: offset
+        };
+      });
+
+      // 3. 转换为数组并排序
+      return Object.values(baseZones).sort((a, b) => a.offsetMinutes - b.offsetMinutes);
+    };
+
+    // 填充下拉菜单
+    function populateSelect(zones) {
+      const select = document.getElementById("inputZone");
+      zones.forEach(({ id, name }) => {
+        const option = document.createElement("option");
+        option.value = id;
+        option.textContent = `${name ? name + " | " : ""}${id}`;
+        select.appendChild(option);
+      });
+
+      // 默认选择本地时区
+      const localZone = DateTime.local().zoneName;
+      if ([...select.options].some(opt => opt.value === localZone)) {
+        select.value = localZone;
+      }
     }
 
+    function formatOffset(offsetMinutes) {
+        const sign = offsetMinutes >= 0 ? "+" : "-";
+        const abs = Math.abs(offsetMinutes);
+        const hours = Math.floor(abs / 60).toString().padStart(2, "0");
+        const minutes = (abs % 60).toString().padStart(2, "0");
+        return `UTC${sign}${hours}:${minutes}`;
+      }
+      
+
+    // 执行转换
     function convert() {
       const inputTime = document.getElementById("inputTime").value;
       const inputZone = document.getElementById("inputZone").value;
@@ -82,45 +123,40 @@
         return;
       }
 
-      try {
-        const dt = DateTime.fromISO(inputTime, { zone: inputZone });
-        if (!dt.isValid) {
-          alert("时间或时区无效，请检查！");
-          return;
-        }
-
-        const tbody = document.getElementById("results");
-        tbody.innerHTML = "";
-
-        timezones.forEach(tz => {
-          const local = dt.setZone(tz.id);
-          const now = DateTime.now().setZone(tz.id);
-          const offset = now.offset / 60;
-          const offsetStr = `UTC${offset >= 0 ? "+" : ""}${offset}`;
-
-          const row = document.createElement("tr");
-
-          if (tz.name === "CET" || tz.name.includes("China")) {
-            row.classList.add("highlight");
-          }
-
-          row.innerHTML = `
-            <td>${offsetStr}</td>
-            <td>${tz.name}</td>
-            <td>${tz.id}</td>
-            <td>${local.toFormat("yyyy-MM-dd HH:mm:ss")}</td>
-          `;
-          tbody.appendChild(row);
-        });
-      } catch (e) {
-        alert("转换失败：" + e.message);
+      const dt = DateTime.fromISO(inputTime, { zone: inputZone });
+      if (!dt.isValid) {
+        alert("输入的时间或时区无效！");
+        return;
       }
+
+      const tbody = document.getElementById("results");
+      tbody.innerHTML = "";
+
+      const zones = buildUniqueZones();
+      zones.forEach(({ id, name, offsetMinutes }) => {
+        const localTime = dt.setZone(id);
+        if (!localTime.isValid) return;
+
+        const offsetStr = formatOffset(offsetMinutes);
+
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${offsetStr.replace(".00", ":00").replace(".50", ":30")}</td>
+          <td>${name || ""}</td>
+          <td>${id}</td>
+          <td>${localTime.toFormat("yyyy-MM-dd HH:mm:ss")}</td>
+        `;
+        tbody.appendChild(row);
+      });
     }
 
-    // 默认执行一次（使用当前时间）
+    // 初始化页面
     window.addEventListener("DOMContentLoaded", () => {
-      const now = DateTime.local().toISO({ suppressMilliseconds: true, includeOffset: false });
-      document.getElementById("inputTime").value = now.substring(0, 16); // yyyy-MM-ddTHH:mm
+      const now = DateTime.local();
+      document.getElementById("inputTime").value = now.toISO({ suppressMilliseconds: true }).substring(0, 16);
+
+      const zones = buildUniqueZones();
+      populateSelect(zones);
       convert();
     });
   </script>
